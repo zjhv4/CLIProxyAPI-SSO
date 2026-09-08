@@ -117,6 +117,9 @@ func autoUpdateSkipReason(cfg *config.Config) (string, bool) {
 	if cfg.RemoteManagement.DisableAutoUpdatePanel {
 		return "disable-auto-update-panel is enabled", true
 	}
+	if cfg.RemoteManagement.CloudflareAccess.Enabled {
+		return "Cloudflare Access SSO uses the bundled management panel", true
+	}
 	return "", false
 }
 

@@ -435,6 +435,17 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 			changes = append(changes, "remote-management.secret-key: updated")
 		}
 	}
+	oldAccess := oldCfg.RemoteManagement.CloudflareAccess
+	newAccess := newCfg.RemoteManagement.CloudflareAccess
+	if oldAccess.Enabled != newAccess.Enabled {
+		changes = append(changes, fmt.Sprintf("remote-management.cloudflare-access.enabled: %t -> %t", oldAccess.Enabled, newAccess.Enabled))
+	}
+	if strings.TrimSpace(oldAccess.TeamDomain) != strings.TrimSpace(newAccess.TeamDomain) {
+		changes = append(changes, "remote-management.cloudflare-access.team-domain: updated")
+	}
+	if strings.TrimSpace(oldAccess.Audience) != strings.TrimSpace(newAccess.Audience) {
+		changes = append(changes, "remote-management.cloudflare-access.audience: updated")
+	}
 
 	// OpenAI compatibility providers (summarized)
 	if compat := DiffOpenAICompatibility(oldCfg.OpenAICompatibility, newCfg.OpenAICompatibility); len(compat) > 0 {

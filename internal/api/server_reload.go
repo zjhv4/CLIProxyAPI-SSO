@@ -126,11 +126,8 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		util.SetLogLevel(cfg)
 	}
 
-	prevSecretEmpty := true
-	if oldCfg != nil {
-		prevSecretEmpty = oldCfg.RemoteManagement.SecretKey == ""
-	}
-	newSecretEmpty := cfg.RemoteManagement.SecretKey == ""
+	previousManagementAuth := managementAuthConfigured(oldCfg)
+	newManagementAuth := managementAuthConfigured(cfg) || s.localPassword != ""
 	if s.envManagementSecret {
 		s.registerManagementRoutes()
 		if s.managementRoutesEnabled.CompareAndSwap(false, true) {
@@ -140,21 +137,21 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		}
 	} else {
 		switch {
-		case prevSecretEmpty && !newSecretEmpty:
+		case !previousManagementAuth && newManagementAuth:
 			s.registerManagementRoutes()
 			if s.managementRoutesEnabled.CompareAndSwap(false, true) {
-				log.Info("management routes enabled after secret key update")
+				log.Info("management routes enabled after authentication configuration update")
 			} else {
 				s.managementRoutesEnabled.Store(true)
 			}
-		case !prevSecretEmpty && newSecretEmpty:
+		case previousManagementAuth && !newManagementAuth:
 			if s.managementRoutesEnabled.CompareAndSwap(true, false) {
-				log.Info("management routes disabled after secret key removal")
+				log.Info("management routes disabled after authentication configuration removal")
 			} else {
 				s.managementRoutesEnabled.Store(false)
 			}
 		default:
-			s.managementRoutesEnabled.Store(!newSecretEmpty)
+			s.managementRoutesEnabled.Store(newManagementAuth)
 		}
 	}
 	redisqueue.SetEnabled(s.managementRoutesEnabled.Load() || (cfg != nil && cfg.Home.Enabled))

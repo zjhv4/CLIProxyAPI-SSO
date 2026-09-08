@@ -1482,6 +1482,45 @@ func TestManagementResponseExposesPluginSupportHeaderForCORS(t *testing.T) {
 	}
 }
 
+func TestManagementRoutesEnabledWithCloudflareAccessSSOOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tmpDir := t.TempDir()
+	authDir := filepath.Join(tmpDir, "auth")
+	if errMkdir := os.MkdirAll(authDir, 0o700); errMkdir != nil {
+		t.Fatalf("create auth directory: %v", errMkdir)
+	}
+	cfg := &proxyconfig.Config{
+		SDKConfig: sdkconfig.SDKConfig{APIKeys: []string{"test-key"}},
+		Port:      0,
+		AuthDir:   authDir,
+		RemoteManagement: proxyconfig.RemoteManagement{
+			AllowRemote: true,
+			CloudflareAccess: proxyconfig.CloudflareAccessSSO{
+				Enabled:    true,
+				TeamDomain: "https://team.cloudflareaccess.com",
+				Audience:   "management-audience",
+			},
+		},
+	}
+	server := NewServer(
+		cfg,
+		auth.NewManager(nil, nil, nil),
+		sdkaccess.NewManager(),
+		filepath.Join(tmpDir, "config.yaml"),
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
+	rr := httptest.NewRecorder()
+	server.engine.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", rr.Code, http.StatusUnauthorized, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "missing Cloudflare Access token") {
+		t.Fatalf("response did not come from SSO middleware: %s", rr.Body.String())
+	}
+}
+
 func TestOAuthCallbackRouteSkipsManagementKeyMiddleware(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
 

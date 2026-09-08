@@ -7,9 +7,17 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	log "github.com/sirupsen/logrus"
 )
+
+func managementAuthConfigured(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	return cfg.RemoteManagement.SecretKey != "" || cfg.RemoteManagement.CloudflareAccess.Enabled
+}
 
 func (s *Server) registerManagementRoutes() {
 	if s == nil || s.engine == nil || s.mgmt == nil {
@@ -303,6 +311,11 @@ func (s *Server) serveManagementControlPanel(c *gin.Context) {
 
 	if _, err := os.Stat(filePath); err != nil {
 		if os.IsNotExist(err) {
+			if cfg.RemoteManagement.CloudflareAccess.Enabled {
+				log.Error("bundled management panel is missing while Cloudflare Access SSO is enabled")
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
 			// Synchronously ensure management.html is available with a detached context.
 			// Control panel bootstrap should not be canceled by client disconnects.
 			if !managementasset.EnsureLatestManagementHTML(context.Background(), managementasset.StaticDir(s.configFilePath), cfg.ProxyURL, cfg.RemoteManagement.PanelGitHubRepository) {

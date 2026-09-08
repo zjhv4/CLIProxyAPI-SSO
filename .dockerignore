@@ -39,3 +39,7 @@ bin
 .bmad
 _bmad
 _bmad-output
+
+# Management UI local build output
+management-ui/node_modules
+management-ui/dist

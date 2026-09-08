@@ -60,6 +60,10 @@ type Handler struct {
 	pluginStoreHTTPClient   pluginstore.HTTPDoer
 	pluginReleaseCacheMu    sync.Mutex
 	pluginReleaseCache      map[string]pluginReleaseCacheEntry
+	cloudflareAccessMu      sync.Mutex
+	cloudflareAccessKey     string
+	cloudflareAccess        *cloudflareAccessValidator
+	cloudflareAccessVerify  cloudflareAccessVerifyFunc
 }
 
 type configReloadSnapshot struct {
@@ -269,9 +273,6 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 		c.Header("X-CPA-BUILD-DATE", buildinfo.BuildDate)
 		c.Header("X-CPA-SUPPORT-PLUGIN", pluginhost.SupportPluginHeaderValue())
 
-		clientIP := c.ClientIP()
-		localClient := clientIP == "127.0.0.1" || clientIP == "::1"
-
 		// Accept either Authorization: Bearer <key> or X-Management-Key
 		var provided string
 		if ah := c.GetHeader("Authorization"); ah != "" {
@@ -285,6 +286,35 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 		if provided == "" {
 			provided = c.GetHeader("X-Management-Key")
 		}
+
+		if h.cloudflareAccessEnabled() {
+			accessJWT := strings.TrimSpace(c.GetHeader("Cf-Access-Jwt-Assertion"))
+			if accessJWT == "" {
+				if cookieJWT, errCookie := c.Cookie("CF_Authorization"); errCookie == nil {
+					accessJWT = strings.TrimSpace(cookieJWT)
+				}
+			}
+			if accessJWT != "" {
+				identity, errVerify := h.verifyCloudflareAccess(c.Request.Context(), accessJWT)
+				if errVerify != nil {
+					log.WithError(errVerify).Warn("management: rejected Cloudflare Access token")
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid Cloudflare Access token"})
+					return
+				}
+				c.Set(cloudflareAccessEmailContextKey, identity.Email)
+				c.Set(cloudflareAccessSubjectContextKey, identity.Subject)
+				c.Header("X-CPA-AUTH-MODE", "cloudflare-access")
+				c.Next()
+				return
+			}
+			if provided == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing Cloudflare Access token or management key"})
+				return
+			}
+		}
+
+		clientIP := c.ClientIP()
+		localClient := clientIP == "127.0.0.1" || clientIP == "::1"
 
 		allowed, statusCode, errMsg := h.AuthenticateManagementKey(clientIP, localClient, provided)
 		if !allowed {

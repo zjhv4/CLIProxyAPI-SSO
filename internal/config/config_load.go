@@ -117,6 +117,24 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	if cfg.RemoteManagement.PanelGitHubRepository == "" {
 		cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
 	}
+	cfg.RemoteManagement.CloudflareAccess.TeamDomain = normalizeCloudflareAccessTeamDomain(
+		cfg.RemoteManagement.CloudflareAccess.TeamDomain,
+	)
+	cfg.RemoteManagement.CloudflareAccess.Audience = strings.TrimSpace(
+		cfg.RemoteManagement.CloudflareAccess.Audience,
+	)
+	envAccessTeamDomain := normalizeCloudflareAccessTeamDomain(
+		os.Getenv("MANAGEMENT_CLOUDFLARE_ACCESS_TEAM_DOMAIN"),
+	)
+	envAccessAudience := strings.TrimSpace(os.Getenv("MANAGEMENT_CLOUDFLARE_ACCESS_AUDIENCE"))
+	if envAccessTeamDomain != "" || envAccessAudience != "" {
+		if envAccessTeamDomain == "" || envAccessAudience == "" {
+			return nil, fmt.Errorf("MANAGEMENT_CLOUDFLARE_ACCESS_TEAM_DOMAIN and MANAGEMENT_CLOUDFLARE_ACCESS_AUDIENCE must be set together")
+		}
+		cfg.RemoteManagement.CloudflareAccess.Enabled = true
+		cfg.RemoteManagement.CloudflareAccess.TeamDomain = envAccessTeamDomain
+		cfg.RemoteManagement.CloudflareAccess.Audience = envAccessAudience
+	}
 
 	cfg.Pprof.Addr = strings.TrimSpace(cfg.Pprof.Addr)
 	if cfg.Pprof.Addr == "" {
@@ -188,4 +206,12 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 
 	// Return the populated configuration struct.
 	return &cfg, nil
+}
+
+func normalizeCloudflareAccessTeamDomain(value string) string {
+	teamDomain := strings.TrimRight(strings.TrimSpace(value), "/")
+	if teamDomain != "" && !strings.Contains(teamDomain, "://") {
+		teamDomain = "https://" + teamDomain
+	}
+	return teamDomain
 }

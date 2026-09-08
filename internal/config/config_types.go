@@ -232,6 +232,17 @@ type RemoteManagement struct {
 	// PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.
 	// Accepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.
 	PanelGitHubRepository string `yaml:"panel-github-repository"`
+	// CloudflareAccess enables management authentication with a verified Cloudflare Access application JWT.
+	CloudflareAccess CloudflareAccessSSO `yaml:"cloudflare-access"`
+}
+
+// CloudflareAccessSSO configures browser single sign-on for the management API.
+// Cloudflare Access remains responsible for the OIDC exchange with the identity provider;
+// CPA validates the signed application JWT delivered to the origin.
+type CloudflareAccessSSO struct {
+	Enabled    bool   `yaml:"enabled"`
+	TeamDomain string `yaml:"team-domain"`
+	Audience   string `yaml:"audience"`
 }
 
 // QuotaExceeded defines the behavior when API quota limits are exceeded.
